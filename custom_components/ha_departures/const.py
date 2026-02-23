@@ -39,6 +39,7 @@ CONF_ERROR_CONNECTION_FAILED: Final = "connection_failed"
 # Sensor attributes
 ATTR_LINE_NAME: Final = "line_name"
 ATTR_LINE_ID: Final = "line_id"
+ATTR_LINE_NUMBER: Final = "line_number"  # e.g. "40", "41" for trains; route_short_name for buses
 ATTR_TRANSPORT_TYPE: Final = "transport"
 ATTR_DIRECTION: Final = "direction"
 ATTR_PROVIDER_URL: Final = "data_provider"

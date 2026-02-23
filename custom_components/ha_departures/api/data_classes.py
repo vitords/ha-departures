@@ -114,6 +114,7 @@ class Line:
     head_sign: str
     route_short_name: str
     mode: TransportMode
+    display_name: str = ""  # e.g. "40", "41" for Pendeltåg when routeShortName is empty
 
     def to_dict(self) -> dict[str, Any]:
         """Convert Line object to dictionary."""
@@ -122,6 +123,7 @@ class Line:
             "direction_id": self.direction_id,
             "head_sign": self.head_sign,
             "route_short_name": self.route_short_name,
+            "display_name": self.display_name,
             "transport_mode": self.mode.value,
         }
 
@@ -133,19 +135,26 @@ class Line:
             direction_id=data.get("direction_id", "unknown"),
             head_sign=data.get("head_sign", "unknown"),
             route_short_name=data.get("route_short_name", "unknown"),
+            display_name=data.get("display_name", ""),
             mode=TransportMode(data.get("transport_mode", "unknown")),
         )
 
+    def line_label(self) -> str:
+        """Return the line number/name for display (route_short_name or display_name)."""
+        return self.route_short_name or self.display_name or ""
+
     def __hash__(self) -> int:
-        """Override hash function for Line class."""
-        return hash((self.route_id, self.direction_id))
+        """Override hash function for Line class (unique per route, direction, headsign)."""
+        return hash((self.route_id, self.direction_id, self.head_sign))
 
     def __eq__(self, value: object) -> bool:
         """Override equality check for Line class."""
         if not isinstance(value, Line):
             return NotImplemented
         return (
-            self.route_id == value.route_id and self.direction_id == value.direction_id
+            self.route_id == value.route_id
+            and self.direction_id == value.direction_id
+            and self.head_sign == value.head_sign
         )
 
 
@@ -155,6 +164,7 @@ class Departure:
 
     route_id: str
     direction_id: str
+    head_sign: str
     trip_id: str
     stop_id: str
     departure: datetime | None
@@ -171,6 +181,7 @@ class Departure:
         return Departure(
             route_id=data.get("routeId", "unknown"),
             direction_id=data.get("directionId", "unknown"),
+            head_sign=data.get("headsign", "unknown"),
             trip_id=data.get("tripId", "unknown"),
             stop_id=data.get("place", {}).get("stopId", "unknown"),
             departure=str_to_datetime(departure_time),

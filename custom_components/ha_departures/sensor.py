@@ -14,6 +14,7 @@ from .const import (
     ATTR_ESTIMATED_DEPARTURE_TIME,
     ATTR_LINE_ID,
     ATTR_LINE_NAME,
+    ATTR_LINE_NUMBER,
     ATTR_PLANNED_DEPARTURE_TIME,
     ATTR_PROVIDER_URL,
     ATTR_TIMES,
@@ -70,6 +71,7 @@ class DeparturesSensor(
 
         self._transport = line_obj.mode
         self._route_name = line_obj.route_short_name
+        self._line_label = line_obj.line_label()  # route_short_name or display_name (e.g. "40", "41")
         self._route_id = line_obj.route_id
         self._destination = line_obj.head_sign
         self._direction_id = line_obj.direction_id
@@ -77,14 +79,15 @@ class DeparturesSensor(
         self._times = []
         self._value = None
 
-        self._attr_name = (
-            f"{coordinator.hub_name}-{self._route_name}-{self._destination}"
-        )
+        # Entity name includes line number (e.g. 40, 41) so trains with same destination are distinguishable
+        name_parts = [coordinator.hub_name, self._line_label or self._route_name, self._destination]
+        self._attr_name = " - ".join(p for p in name_parts if p)
         self._attr_unique_id = f"{slugify(coordinator.hub_name)}-{self._route_id}-{self._direction_id}-{slugify(self._destination)}"
 
         self._attr_extra_state_attributes = {
             ATTR_LINE_NAME: self._route_name,
             ATTR_LINE_ID: self._route_id,
+            ATTR_LINE_NUMBER: self._line_label or self._route_name,
             ATTR_TRANSPORT_TYPE: self._transport.value,
             ATTR_DIRECTION: line_obj.head_sign,
             ATTR_PROVIDER_URL: PROVIDER_URL,
@@ -159,7 +162,8 @@ class DeparturesSensor(
         departures = list(
             filter(
                 lambda d: d.route_id == self._route_id
-                and d.direction_id == self._direction_id,
+                and d.direction_id == self._direction_id
+                and d.head_sign == self._destination,
                 self.coordinator.data,
             )
         )

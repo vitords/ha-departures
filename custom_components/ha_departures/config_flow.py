@@ -41,6 +41,19 @@ from .helper import bounding_box
 _LOGGER = logging.getLogger(__name__)
 
 
+def _format_line_label(line: Line) -> str:
+    """Format line for display: 'Mode 40 - Södertälje' or 'Mode 540 - Tensta'."""
+    mode = line.mode.capitalize()
+    label = line.line_label()
+    if label:
+        return f"{mode} {label} - {line.head_sign}"
+    return f"{mode} - {line.head_sign}"
+
+# Separator for line selector value (route_id---direction_id---head_sign)
+# Using split(sep, 2) so headsign can contain "---" if needed
+LINE_VALUE_SEP = "---"
+
+
 async def _send_api_request(api: MotisApi, command, params):
     error = CONF_ERROR_CONNECTION_FAILED
 
@@ -209,13 +222,17 @@ class DeparturesFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             selected_lines: list[Line] = []
 
             for line in user_input.get(CONF_LINES, []):
-                (routeId, directionId) = line.split("---")
+                parts = line.split(LINE_VALUE_SEP, 2)
+                route_id = parts[0]
+                direction_id = parts[1]
+                head_sign = parts[2] if len(parts) > 2 else ""
 
                 selected_lines.append(
                     next(
                         filter(
-                            lambda x: x.route_id == routeId
-                            and x.direction_id == directionId,
+                            lambda x: x.route_id == route_id
+                            and x.direction_id == direction_id
+                            and (not head_sign or x.head_sign == head_sign),
                             self._lines,
                         )
                     )
@@ -261,7 +278,8 @@ class DeparturesFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                     route_id=stop_time.get("routeId"),
                     direction_id=stop_time.get("directionId"),
                     head_sign=stop_time.get("headsign"),
-                    route_short_name=stop_time.get("routeShortName"),
+                    route_short_name=stop_time.get("routeShortName") or "",
+                    display_name=stop_time.get("displayName") or "",
                     mode=TransportMode(stop_time.get("mode")),
                 )
 
@@ -269,7 +287,7 @@ class DeparturesFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                     "Found line: [%s-%s] %s (%s)",
                     line.mode,
                     line.head_sign,
-                    line.route_short_name,
+                    line.line_label(),
                     line.direction_id,
                 )
 
@@ -279,8 +297,8 @@ class DeparturesFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
         line_list: list[SelectOptionDict] = [
             SelectOptionDict(
-                label=f"{line.mode.capitalize()} {line.route_short_name} - {line.head_sign}",
-                value=f"{line.route_id}---{line.direction_id}",
+                label=_format_line_label(line),
+                value=f"{line.route_id}{LINE_VALUE_SEP}{line.direction_id}{LINE_VALUE_SEP}{line.head_sign}",
             )
             for line in self._lines
         ]
@@ -374,13 +392,17 @@ class DeparturesOptionsFlowHandler(config_entries.OptionsFlow):
             lines_new_state: list[Line] = []
 
             for user_option in lines_user_choose:
-                (route_id, direction_id) = user_option.split("---")
+                parts = user_option.split(LINE_VALUE_SEP, 2)
+                route_id = parts[0]
+                direction_id = parts[1]
+                head_sign = parts[2] if len(parts) > 2 else ""
 
                 lines_new_state.append(
                     next(
                         filter(
                             lambda x: x.route_id == route_id
-                            and x.direction_id == direction_id,
+                            and x.direction_id == direction_id
+                            and (not head_sign or x.head_sign == head_sign),
                             self._lines_available,
                         )
                     )
@@ -399,8 +421,9 @@ class DeparturesOptionsFlowHandler(config_entries.OptionsFlow):
 
         options_list: list[SelectOptionDict] = [
             SelectOptionDict(
-                label=f"{line.route_short_name} - {line.head_sign}",
-                value=f"{line.route_id}---{line.direction_id}",
+                label=" - ".join(filter(None, [line.line_label(), line.head_sign]))
+                or line.head_sign,
+                value=f"{line.route_id}{LINE_VALUE_SEP}{line.direction_id}{LINE_VALUE_SEP}{line.head_sign}",
             )
             for line in self._lines_available
         ]
@@ -412,7 +435,7 @@ class DeparturesOptionsFlowHandler(config_entries.OptionsFlow):
                     vol.Required(
                         "lines",
                         default=[
-                            f"{x.route_id}---{x.direction_id}"
+                            f"{x.route_id}{LINE_VALUE_SEP}{x.direction_id}{LINE_VALUE_SEP}{x.head_sign}"
                             for x in self._lines_selected
                         ],
                     ): SelectSelector(
